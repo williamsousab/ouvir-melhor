@@ -28,6 +28,10 @@ final class Dsp {
     private final Biquad[] eqR = new Biquad[Params.BANDS_HZ.length];
 
     private boolean comp, gate;
+    private int noiseMode = 0;
+    private final SpectralDenoiser spectral;
+    private NeuralDenoiser neural;
+    private float[] work = new float[256];
     private double ceiling = FULL_CEILING;
     private double targetGain = 1, gain = 1;
     private double targetL = 1, targetR = 1, gainL = 1, gainR = 1;
@@ -37,6 +41,7 @@ final class Dsp {
 
     Dsp(int sampleRate) {
         fs = sampleRate;
+        spectral = new SpectralDenoiser(sampleRate);
         for (int i = 0; i < eqL.length; i++) {
             eqL[i] = new Biquad();
             eqR[i] = new Biquad();
@@ -52,6 +57,22 @@ final class Dsp {
     void update() {
         comp = Params.compressor;
         gate = Params.noiseReduction;
+        noiseMode = Params.noiseMode;
+        if (noiseMode == 3 && fs == 48000 && NeuralDenoiser.AVAILABLE) {
+            if (neural == null) neural = new NeuralDenoiser();
+            if (!neural.ok()) noiseMode = 2;
+        } else if (noiseMode == 3) {
+            noiseMode = 2; // sem rede neural neste aparelho: usa o filtro forte
+        }
+        double st = Math.max(0, Math.min(100, Params.noiseStrength)) / 100.0;
+        if (noiseMode == 1 || noiseMode == 2) {
+            // 0% = quase nada (-6 dB), 100% = máximo (-30 dB)
+            spectral.setStrength(1.0 + 2.4 * st, -(6.0 + 24.0 * st));
+        } else if (noiseMode == 3) {
+            neural.setWet((float) (0.4 + 0.6 * st));
+            spectral.setStrength(1.0 + 1.0 * st, -(4.0 + 10.0 * st)); // complemento suave da IA
+        }
+        Params.neuralActive = noiseMode == 3;
         if (Params.lowCut) hpf.setHighPass(fs, LOW_CUT_HZ, 0.707);
         else hpf.setBypass();
 
@@ -100,14 +121,28 @@ final class Dsp {
         return g;
     }
 
+    void release() {
+        if (neural != null) {
+            neural.release();
+            neural = null;
+        }
+    }
+
     /** Entrada mono (n amostras) -> saída estéreo intercalada (2n amostras). */
     void process(short[] in, short[] out, int n) {
         double sumIn = 0, sumOut = 0;
+        if (work.length < n) work = new float[n];
         for (int i = 0; i < n; i++) {
             double x = in[i] / 32768.0;
             sumIn += x * x;
+            work[i] = (float) hpf.process(x);
+        }
+        // Redução de ruído: rede neural (voz) e/ou filtro espectral adaptativo
+        if (noiseMode == 3 && neural != null) neural.process(work, n);
+        if (noiseMode > 0) spectral.process(work, n);
 
-            x = hpf.process(x);
+        for (int i = 0; i < n; i++) {
+            double x = work[i];
 
             // Detector de nível para compressão / redução de chiado
             double a = Math.abs(x);

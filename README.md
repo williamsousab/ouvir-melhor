@@ -16,7 +16,7 @@ amplifica) e manda para o fone em tempo real.
 | Programas | Natural, Conversa, TV, Restaurante, Música, Ao ar livre, Perda nos agudos |
 | Equalizador de 6 bandas | 250 Hz a 8 kHz, ajuste fino à mão |
 | Compressão WDRC | Sons fracos ficam mais altos sem sons fortes estourarem |
-| Redução de chiado e ruído | Supressor de ruído do Android + expansor |
+| **Redução de ruído com barra de intensidade** | Filtro espectral adaptativo (aprende ruídos constantes: bomba de piscina, ventilador, motor) + modo **IA** com rede neural RNNoise que separa a voz do barulho |
 | Corte de graves | Tira vento, motor, batidas |
 | Microfone: Voz / Ambiente / Apontar o celular | "Apontar" usa o microfone da câmera, bom para TV |
 | Proteção do ouvido | Limitador com volume máximo ajustável |
@@ -56,3 +56,7 @@ ou rode `gradle assembleRelease`.
 - Comece sempre com volume baixo. Som alto por muito tempo pode piorar a audição.
 - O arquivo `app/assinatura-teste.keystore` é uma chave de assinatura simples para o app
   poder ser atualizado por cima. Serve para uso pessoal; para publicar na Play Store, use uma chave própria.
+
+## Créditos
+
+Redução de ruído neural: [RNNoise](https://github.com/xiph/rnnoise) (Xiph.Org / Mozilla, licença BSD — ver `app/src/main/cpp/rnnoise/COPYING`).

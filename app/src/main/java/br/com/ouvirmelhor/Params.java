@@ -65,7 +65,31 @@ public final class Params {
     public static volatile int maxOutPct = 85;
 
     public static volatile int micMode = 0;
-    public static volatile boolean noiseReduction = true;
+    public static volatile boolean noiseReduction = true; // = noiseMode > 0
+
+    // ---------------- Redução de ruído ----------------
+    public static final String[] NOISE_MODE_NAMES = {"Desligada", "Normal", "Forte", "IA (voz)"};
+    public static final String[] NOISE_MODE_HINTS = {
+            "Sem filtro: som ambiente completo.",
+            "Tira ruídos constantes (ventilador, geladeira, bomba de piscina) sem mexer na voz.",
+            "Tira bem mais ruído constante. A voz pode ficar um pouco \"abafada\".",
+            "Rede neural que separa a voz do barulho. Melhor para conversar em lugar barulhento; "
+                    + "outros sons (música, TV) ficam mais baixos."
+    };
+    // Programa -> modo de ruído
+    public static final int[] PRESET_NOISE = {0, 1, 0, 3, 0, 2, 1};
+    public static volatile int noiseMode = 1;
+    /** Intensidade da redução de ruído, 0..100%. */
+    public static volatile int noiseStrength = 30;
+    public static final int STRENGTH_NORMAL = 30, STRENGTH_STRONG = 75;
+
+    public static void setNoiseMode(int m) {
+        noiseMode = Math.max(0, Math.min(3, m));
+        noiseReduction = noiseMode > 0;
+        if (noiseMode == 1) noiseStrength = STRENGTH_NORMAL;
+        else if (noiseMode == 2) noiseStrength = STRENGTH_STRONG;
+        changed();
+    }
     public static volatile boolean compressor = true;
     public static volatile boolean lowCut = true;
 
@@ -84,6 +108,7 @@ public final class Params {
     // ---------------- Estado do motor ----------------
     public static volatile boolean serviceActive = false;
     public static volatile boolean running = false;
+    public static volatile boolean neuralActive = false;
     public static volatile float inputLevelDb = -100f;
     public static volatile float outputLevelDb = -100f;
     public static volatile String lastError = null;
@@ -102,7 +127,11 @@ public final class Params {
     public static void applyPreset(int idx) {
         preset = idx;
         System.arraycopy(PRESET_EQ[idx], 0, eqDb, 0, eqDb.length);
-        noiseReduction = PRESET_FLAGS[idx][0];
+        noiseMode = PRESET_NOISE[idx];
+        noiseReduction = noiseMode > 0;
+        if (noiseMode == 1) noiseStrength = STRENGTH_NORMAL;
+        else if (noiseMode == 2) noiseStrength = STRENGTH_STRONG;
+        else if (noiseMode == 3) noiseStrength = 60;
         compressor = PRESET_FLAGS[idx][1];
         lowCut = PRESET_FLAGS[idx][2];
         changed();
@@ -158,7 +187,9 @@ public final class Params {
         boostPct = p.getInt("boost", boostPct);
         maxOutPct = p.getInt("maxout", maxOutPct);
         micMode = p.getInt("mic", micMode);
-        noiseReduction = p.getBoolean("nr", noiseReduction);
+        noiseMode = Math.max(0, Math.min(3, p.getInt("noiseMode", noiseMode)));
+        noiseReduction = noiseMode > 0;
+        noiseStrength = Math.max(0, Math.min(100, p.getInt("noiseStrength", noiseStrength)));
         compressor = p.getBoolean("comp", compressor);
         lowCut = p.getBoolean("lowcut", lowCut);
         hasTest = p.getBoolean("hasTest", false);
@@ -182,7 +213,8 @@ public final class Params {
         e.putInt("boost", boostPct);
         e.putInt("maxout", maxOutPct);
         e.putInt("mic", micMode);
-        e.putBoolean("nr", noiseReduction);
+        e.putInt("noiseMode", noiseMode);
+        e.putInt("noiseStrength", noiseStrength);
         e.putBoolean("comp", compressor);
         e.putBoolean("lowcut", lowCut);
         e.putBoolean("hasTest", hasTest);

@@ -59,7 +59,10 @@ public class MainActivity extends Activity {
     private final Button[] micButtons = new Button[Params.MIC_MODE_NAMES.length];
     private final Button[] boostButtons = new Button[3];
     private static final int[] BOOST_VALUES = {100, 150, 200};
-    private Switch swNoise, swComp, swLowCut, swUseTest;
+    private Switch swComp, swLowCut, swUseTest;
+    private final Button[] noiseButtons = new Button[Params.NOISE_MODE_NAMES.length];
+    private TextView noiseHint, noiseLabel;
+    private SeekBar noiseBar;
     private AudiogramView audiogram;
     private Button testButton;
 
@@ -259,6 +262,7 @@ public class MainActivity extends Activity {
         buildVolume(root);
         buildBooster(root);
         buildPresets(root);
+        buildNoise(root);
         buildHearingTest(root);
         buildEars(root);
         buildMic(root);
@@ -446,12 +450,79 @@ public class MainActivity extends Activity {
         }
     }
 
+    private void buildNoise(LinearLayout root) {
+        LinearLayout c = card(root, "Redução de ruído",
+                "Tira barulho de fundo: bomba de piscina, ventilador, motor, conversa ao redor.");
+        for (int i = 0; i < noiseButtons.length; i++) {
+            final int idx = i;
+            noiseButtons[i] = button(Params.NOISE_MODE_NAMES[i]);
+            noiseButtons[i].setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+            noiseButtons[i].setOnClickListener(v -> {
+                Params.setNoiseMode(idx);
+                Params.preset = -1;
+                updatePresetButtons();
+                updateNoiseUi();
+            });
+        }
+        grid(c, noiseButtons, 2, 52);
+        noiseHint = text("", 14, TEXT2, false);
+        noiseHint.setPadding(0, dp(8), 0, dp(4));
+        c.addView(noiseHint);
+        noiseLabel = text("", 16, TEXT, false);
+        noiseLabel.setPadding(0, dp(6), 0, 0);
+        c.addView(noiseLabel);
+        noiseBar = seek(c, 100, ACCENT);
+        noiseBar.setOnSeekBarChangeListener(new OnSeek() {
+            @Override
+            public void onProgressChanged(SeekBar s, int p, boolean fromUser) {
+                if (fromUser) {
+                    Params.noiseStrength = p;
+                    if (Params.noiseMode == 0) {
+                        Params.noiseMode = 1;
+                        Params.noiseReduction = true;
+                        updateNoiseButtons();
+                    }
+                    Params.changed();
+                }
+                noiseLabel.setText(noiseText(p));
+            }
+        });
+        LinearLayout ends = new LinearLayout(this);
+        ends.setOrientation(LinearLayout.HORIZONTAL);
+        TextView lo = text("Menos (mais natural)", 13, TEXT2, false);
+        TextView hi = text("Mais (mais silêncio)", 13, TEXT2, false);
+        hi.setGravity(android.view.Gravity.END);
+        ends.addView(lo, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        ends.addView(hi, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        c.addView(ends);
+    }
+
+    private String noiseText(int p) {
+        return String.format(Locale.ROOT, "Intensidade da redução: %d%%", p);
+    }
+
+    private void updateNoiseButtons() {
+        for (int i = 0; i < noiseButtons.length; i++) select(noiseButtons[i], Params.noiseMode == i, ACCENT);
+    }
+
+    private void updateNoiseUi() {
+        updateNoiseButtons();
+        int m = Params.noiseMode;
+        String hint = Params.NOISE_MODE_HINTS[m];
+        if (m == 3 && Params.running && !Params.neuralActive) {
+            hint = "A IA não funcionou neste aparelho; usando o filtro Forte no lugar.";
+        }
+        noiseHint.setText(hint);
+        noiseBar.setProgress(Params.noiseStrength);
+        noiseBar.setEnabled(m != 0);
+        noiseBar.setAlpha(m != 0 ? 1f : 0.4f);
+        noiseLabel.setText(m == 0 ? "Intensidade da redução: desligada" : noiseText(Params.noiseStrength));
+    }
+
     private void buildOptions(LinearLayout root) {
         LinearLayout c = card(root, "Opções de som", null);
-        swNoise = toggleSwitch(c, "Redução de chiado e ruído");
         swComp = toggleSwitch(c, "Realçar sons fracos (compressão)");
         swLowCut = toggleSwitch(c, "Cortar graves (vento, motor, batidas)");
-        swNoise.setOnCheckedChangeListener((b, v) -> { Params.noiseReduction = v; Params.changed(); });
         swComp.setOnCheckedChangeListener((b, v) -> { Params.compressor = v; Params.changed(); });
         swLowCut.setOnCheckedChangeListener((b, v) -> { Params.lowCut = v; Params.changed(); });
     }
@@ -523,7 +594,7 @@ public class MainActivity extends Activity {
             eqBars[i].setProgress(db + Params.EQ_RANGE_DB);
             updateEqLabel(i, db);
         }
-        swNoise.setChecked(Params.noiseReduction);
+        updateNoiseUi();
         swComp.setChecked(Params.compressor);
         swLowCut.setChecked(Params.lowCut);
 

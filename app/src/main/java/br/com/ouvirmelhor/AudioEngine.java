@@ -47,11 +47,12 @@ final class AudioEngine implements Runnable {
     }
 
     private static int pickSampleRate(AudioManager am) {
-        int[] candidates = {0, 48000, 44100, 32000, 16000};
+        // 48 kHz primeiro: é a taxa que a rede neural de ruído usa
+        int[] candidates = {48000, 0, 44100, 32000, 16000};
         String prop = am.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE);
         if (prop != null) {
             try {
-                candidates[0] = Integer.parseInt(prop);
+                candidates[1] = Integer.parseInt(prop);
             } catch (NumberFormatException ignored) {
             }
         }
@@ -74,6 +75,7 @@ final class AudioEngine implements Runnable {
 
         AudioRecord rec = null;
         AudioTrack track = null;
+        Dsp dsp = null;
         NoiseSuppressor ns = null;
         try {
             int fs = pickSampleRate(am);
@@ -143,7 +145,7 @@ final class AudioEngine implements Runnable {
             }
             boolean nsEnabled = !Params.noiseReduction; // força aplicar na 1ª volta
 
-            Dsp dsp = new Dsp(fs);
+            dsp = new Dsp(fs);
             int lastVersion = Params.version;
             short[] in = new short[FRAMES];
             short[] out = new short[FRAMES * 2];
@@ -196,6 +198,7 @@ final class AudioEngine implements Runnable {
                 try { track.stop(); } catch (RuntimeException ignored) { }
                 track.release();
             }
+            if (dsp != null) dsp.release();
             Params.running = false;
             Params.inputLevelDb = -100f;
             Params.outputLevelDb = -100f;
